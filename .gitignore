@@ -1,0 +1,10 @@
+*.swp
+.swo
+*.class
+target/
+local/
+.gitlocal/
+.idea/
+*.iml
+out
+lobstats

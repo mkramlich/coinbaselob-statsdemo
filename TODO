@@ -1,0 +1,15 @@
+TODO
+
+tests:
+    elim the margin equals compare -- do precise double compares between expected and actual
+
+Prometheus & Grafana
+
+lobstats file:
+    timestamp and Coinbase feed sequence num when lobstats regenerated
+    inputSource, file, runCount (& current iter), urlEnv, url
+    per side: midpoint2's volumeMid and the sum of all top P*V. and maybe total volume and P*V
+    last message timestamp & sequence num received from Coinbase
+    event counts: snapshot, l2update, heartbeat
+
+determine if its possible for me to miss messages (miss buy/sell changes in l2updates), and therefore do I need to try fetching missed ones by calling their REST API

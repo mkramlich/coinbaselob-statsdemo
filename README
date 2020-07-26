@@ -1,0 +1,72 @@
+README
+
+Coinbase BTC-USD LOB stats demo in Java
+by Mike Kramlich
+
+https://github.com/mkramlich/coinbaselob-statsdemo
+--------------------------------------------------
+
+
+Introduction
+
+You'll need Java and Maven. All other dependencies are specified in Maven's pom.xml and will be automatically fetched. Developed with Oracle Java 14 and Maven 3.6.3 but older versions might work. The 'watch' tool is optional but recommended so you can have a terminal dashboard (yes, old skool, to minimize LOE.)
+
+
+Basic Usage
+
+To build, run and tail the log (where all relevant activity is printed and statistics displayed upon their recalc):
+    mvn package exec:java
+
+To view a dashboard (which auto refreshes with latest stats), in another term:
+    watch -n1 cat lobstats
+
+
+Features & Bonuses
+
+The key feature of this demo is to watch the Coinbase asset exchanges's public feed of BTC-USD orders, and determine what the "top" of the market is at any time. Meaning the top 5 or "best" (highest) bid/buy order price levels and best 5 (lowest) ask/sell orders levels. For any given price Coinbase tracks how much total BTC volume is available in buy or sell demand at that price level. Traders monitor this info (either manually or via tooling) and use this information to make their own buy/hold/sell decisions ovr time. Identifying the top 5 (therefore "best") price levels in the sell and buy side data sets was straightforward, because Coinbase's feed API has a convenient syntax for learning it -- they simply sort in opposite order. And because the structures and algorithms were so similar I made both sides repurpose shared functions where possible, and just use different flags or labels. Calculating the midpoint levels *within* the top spans for each side was a little more subtle but also not fundamentally hard. Reading the reqs I came away with two possible interpretations of the midpoint logic, both with good arguments in favor of them. (Look in recalc_stats_for_side() to see precisely how I brought them to life.) One technique is to identify the "median" price level for its top 5 span. The other a "mean" for its span. Mean being easier to compute. Median is likely more desired because it's an actual price point which was quoted, whereas the mean is more mathematically weighted by outliers, and typically has a sub-cent granular fraction of dollars -- unlike a median or actual price, which only resolves to 2 decimal points: the nearest penny. (It appears anyway, from my limited study of the Coinbase docs and data so far.) I recognized that both yield signal to a trader, and therefore calculate and display both. The marginal extra work required to develop 2 methods rather than 1 was not significant and therefore felt it worth doing. When building software truly intended for production and real customers I'd make absolutely sure, upfront, I understood the algorithm desired by the business precisely, and then confirm our assumptions via a demo of a prototype spike ASAP (like what you will likely be doing), and idealy do no "sideways" or "diagonal" work which was unnecessary -- important for a startup, imo, where the team is small, runway is finite and there are many other TODOs.
+
+This program can digest and act on messages provided from *three* different sources of input: a WebSocket feed; or an equiv stream of JSON messages provided by a local file, or, a test-injected array of string message lines. The line-driven and file-driven modes were designed to make testing and analysis easier, and to allow for the isolation of local processing issues (like algorithm choices and resource use) away from that of connectivity with a remote opaque WS feed that is fundamentally out of our control. And to be able to hammer the code paths without wasting bandwidth or Coinbase's resources, or running into arbitrary throttling limits by Coinbase. With no option args specified it defaults to the Coinbase Pro production WS feed (ie. the "real" market.) The Coinbase WS URLs are baked-in but you can also override the URL via an argument.
+
+
+Advanced Usage
+
+To connect to the Coinbase Pro sandbox or prod endpoint:
+    mvn package exec:java -Dexec.args="--env=[prod|sandbox]"
+
+To connect to an arbitrary WS endpoint (assuming its compatible with the Coinbase Pro feed) and process its messages:
+    mvn package exec:java -Dexec.args="--url=somewsurl"
+
+To process messages read from a file, and optionally specify a looping runcount (-1 meaning replay forever):
+    mvn package exec:java -Dexec.args="--file=inputfile --runcount=-1"
+
+To build and run with all logging disabled everywhere except for WARN or above:
+    mvn package exec:java -Dorg.slf4j.simpleLogger.defaultLogLevel=WARN
+
+Like above but with DEBUG level logging for the App (only, not Maven):
+    mvn package exec:java -Dorg.slf4j.simpleLogger.log.mkramlichgithub.coinbaselob.StatsDemo=DEBUG
+
+To just build and test:
+    mvn package test
+
+To build and test with DEBUG logging for the tests:
+    mvn package test -Dorg.slf4j.simpleLogger.log.mkramlichgithub.coinbaselob.StatsDemoTest=DEBUG
+
+The only messages this code truly needs to see to do its job are the "snapshot" messages and the "l2update" messages. Therefore if you configure it to read from a file, simply have a mix of those JSON message types in the file, one per line, and in whatever order or composition you wish -- though best to start with 1 snapshot. With each snapshot or l2update received it recalcs statistics and regenerates the watch-able lobstats file. It should compute the same results as if it had received them live from Coinbase. Two examples are in the data subdir (messages1 and messages2).
+
+
+Strategy & Philosophy
+
+The goal of this project is mainly to add to my portfolio of open code. And to be the first sample in Java. Might upgrade it in the future to demonstrate use of other technologies or services.
+
+Therefore...
+
+Logging is minimal but could use better configuration.
+
+Code comments and documentation are minimal but adequate. I especialy avoided javadoc-style comments because they have no value in this particular context.
+
+Testing is minimal but most common edge cases observed are supported. A production quality implementation should have a thorough set of tests, for all edge cases, and especially around confirming the expected results of the statistical calculations. For example, we assume all quoted USD prices and BTC volumes are non-negative and we have no tests to check what happens in those cases -- but those would be truly abnormal/buggy values from Coinbase. However, this work was unpaid and mainly intended to publish some Java code to help prove I'm a "real" Java programmer. Therefore the tests are minimal. In the future I might add tests specifically to help measure performance, scaling, and various availability and monitoring edge cases.
+
+Monitoring was out of scope for my 1.0 demo sprint. But in a proper production implementation one would want to measure and track event counts and error conditions, latencies, throughput, as well as the liveness of the feed itself. For example, the Coinbase API has a heartbeat channel, and it could be useful to monitor that to help distinguish between situations where the server-side is dead/hung in some way, vs, it is perfectly healthy but merely has no new ask/bid changes to report during the span of concern. In future sprints I might add integration with Prometheus and Grafana, for both the Coinbase market stats data and our performance and health metrics.
+
+The performance and scalability of the current implementation appears... adequate, for now. At least for the data set samples I've seen so far during development. Given that it is merely a demo, and therefore maximizing these aspects was not a goal. It is very likely that the performance and scalability can be significantly improved by more efficient algorithms and shortcuts, as well as by parameter tuning, changing parsers, changing the WS library, collection classes used, or even changing languages. (And obviously by running on beefier hardware or granting it a beefier slice of host resources.) For example, one interesting control provided by the WS API used is the ability to tune the buffer sizes -- this might have the potential to impact latency, throughput and whether any messages are "dropped" on either end. If messages are dropped it can cause our code's deduction of derived statistics, like the midpoints, to be thrown off. I'm new to the Coinbase API but my initial reading of the docs for the APIs in question suggest that Coinbase "guarantees" that if you subscribe to the level2 channel that a subscriber will not miss out on any events which effect the public order book price levels. Supposedly you get 1 initial snapshot (though this code will handle 2+ snapshots cleanly, as an easy precaution), and then subsequently get 0+ l2update messages, with any changes to asks or bids. Knowing the low-level realities of how systems like this are implemented I suspect there are ways for messages to be dropped before a client can process them, and therefore it could be important to ensure we had a perfect understanding of what's possible, and design accordingly to mitigate. No serious perf or scale testing has been done on this codebase. And we've done no research or analysis of what peak historical/upcoming Coinbase feed traffic might look like. In other words, what kinds of peak data set sizes (like the asks and bids arrays) and message frequency (esp l2update) a client would like to support gracefully in order to keep up to date and accurate. Another interesting takeaway I had from the Coinbase docs was that they declare where their endpoints are hosted, which Amazon region. Therefore in theory, and only *if* it ever mattered, you could potentially reduce latency of message delivery (and therefore our stats recalc) in a prod deployment by also hosting this code as "close", network-wise, to Coinbase's endpoint hosts as we are allowed.
+
